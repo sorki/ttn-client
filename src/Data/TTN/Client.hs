@@ -47,11 +47,13 @@ iniParser = section "app" $ do
   appRouterPort <- fieldDefOf "port" number 1883
   return $ Conf {..}
 
+-- | Try parsing config from given 'FilePath'
 parseConfCfg :: FilePath -> IO (Either String Conf)
 parseConfCfg fpath = do
   rs <- T.readFile fpath
   return $ parseIniFile rs iniParser
 
+-- | Try loading config from location in @TTNCFG@ environment variable or @~/.ttn/config@
 envConfCfg :: IO (Conf)
 envConfCfg = do
   menv <- lookupEnv "TTNCFG"
@@ -108,12 +110,13 @@ parseType (MQTT.MqttText t) = typ
 
     sp = T.splitOn "/" t
 
+-- | Try to load config from default locations and start actual client
 ttnClient :: TChan Event -> IO ()
 ttnClient chan = do
   conf <- envConfCfg
   ttnClientConf conf chan
 
-
+-- | Start client with custom `Conf` config
 ttnClientConf :: Conf -> TChan Event -> IO ()
 ttnClientConf Conf{..} chan = do
   cmds <- MQTT.mkCommands
