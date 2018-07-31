@@ -2,7 +2,15 @@
 {-# Language OverloadedStrings #-}
 {-# Language RecordWildCards #-}
 
-module Data.TTN.Client where
+module Data.TTN.Client (
+    ttnClient
+  , ttnClientConf
+  , Event
+  , EventType(..)
+  , Conf(..)
+  , envConfCfg
+  , parseConfCfg
+  ) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
