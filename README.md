@@ -12,6 +12,18 @@ It can also decode two types of payload
  * Cayene low power protocol format (via [cayene-lpp](https://github.com/sorki/cayene-lpp))
  * Simple temperature humidity (two big endian packed floats)
 
+To be able to authenticate with TTN you need to create simple config file along these lines:
+```bash
+[app]
+id = your_app_id
+host = eu.thethings.network
+port = 1883
+key = ttn-account-v2.THIS_KEY_NEEDS_CHANGING
+```
+
+This can be placed in `~/.ttn/config` or passed via `TTNCFG` environment variable. Sample config is avaiable
+in `config.sample`.
+
 ### Example output
 
 ```haskell

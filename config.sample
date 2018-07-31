@@ -1,0 +1,5 @@
+[app]
+id = basetest
+host = eu.thethings.network
+port = 1883
+key = ttn-account-v2.THIS_KEY_NEEDS_CHANGING
