@@ -47,9 +47,10 @@ packages:
     commit: 7d37f51b40bbcaf5d46c393c4d5904fccb025f70
   extra-dep: true
 # until https://github.com/k00mi/mqtt-hs/pull/14/
+# until https://github.com/k00mi/mqtt-hs/pull/17/
 - location:
-    git: https://github.com/bgamari/mqtt-hs.git
-    commit: 9ea59d1a5ff3ed721895674ee3fe9fff615fdac5
+    git: https://github.com/sorki/mqtt-hs.git
+    commit: c7251dfd18aa6573770a21d6bb65d11f13faa118
   extra-dep: true
 
 # Dependency packages to be pulled from upstream that are not in the resolver

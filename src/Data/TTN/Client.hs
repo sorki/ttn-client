@@ -128,18 +128,18 @@ ttnClientConf Conf{..} chan = do
               , MQTT.cPassword = Just appKey
               }
 
-  _ <- forkIO $ do
-    qosGranted <- MQTT.subscribe conf [(topic, MQTT.Handshake)]
-    case qosGranted of
-      [MQTT.Handshake] -> forever $ atomically (readTChan pubChan) >>= (mqttHandleChan chan)
-      _ -> do
-        hPutStrLn stderr $ "Wanted QoS Handshake, got " ++ show qosGranted
-        exitFailure
-
-  -- this will throw IOExceptions, how do we reconnect?
   forever $ do
+    tID <- forkIO $ do
+      qosGranted <- MQTT.subscribe conf [(topic, MQTT.Handshake)]
+      case qosGranted of
+        [MQTT.Handshake] -> forever $ atomically (readTChan pubChan) >>= (mqttHandleChan chan)
+        _ -> do
+          hPutStrLn stderr $ "Wanted QoS Handshake, got " ++ show qosGranted
+          exitFailure
+
     terminated <- MQTT.run conf
     hPutStrLn stderr $ "Terminated, restarting. Reason: " ++ show terminated
+    killThread tID
 
 mqttHandleChan :: TChan Event -> MQTT.Message MQTT.PUBLISH -> IO ()
 mqttHandleChan chan msg = do
