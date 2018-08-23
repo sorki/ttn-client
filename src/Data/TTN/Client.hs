@@ -76,21 +76,6 @@ envConfCfg = do
         Right cfg -> return cfg
 
 
-data EventType a =
-    Up a
-  | Down a
-  | DownAcked a
-  | DownSent a
-  | DownScheduled a
-  | Activation a
-  | Create a
-  | Update a
-  | Delete a
-  | Unknown a
-  deriving (Eq, Ord, Show)
-
-type Event = Either String (EventType Uplink)
-
 topic:: MQTT.Topic
 topic = "#"
 
@@ -153,9 +138,9 @@ mqttHandleChan chan msg = do
         Left err -> do
           case parseError p of
             Left _  -> hPutStrLn stderr $ "Invalid JSON, error: " ++ err
-            Right e -> atomically $ writeTChan chan $ Left $ T.unpack $ errorMsg e
+            Right e -> atomically $ writeTChan chan $ ClientError $ T.unpack $ errorMsg e
 
         Right u@Uplink{..} -> do
           let typ = parseType $ MQTT.fromTopic t
 
-          atomically $ writeTChan chan $ Right $ typ u
+          atomically $ writeTChan chan $ Event typ u
