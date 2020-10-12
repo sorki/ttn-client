@@ -1,62 +1,67 @@
 {-# Language DataKinds #-}
 {-# Language OverloadedStrings #-}
 {-# Language RecordWildCards #-}
+{-# Language ScopedTypeVariables #-}
 
 module Data.TTN.Client (
     ttnClient
   , ttnClientConf
-  , Event
-  , EventType(..)
+  , withTTN
   , Conf(..)
   , envConfCfg
   , parseConfCfg
   ) where
 
 import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Exception (Handler (..), IOException, catches)
 import Control.Monad
+import Data.Text (Text)
 
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
 import Data.TTN
-import qualified Network.MQTT as MQTT
+import Network.MQTT.Client
+import qualified Network.URI
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text
+import qualified Data.Text.IO
+import qualified Data.ByteString.Lazy
 
 import Data.Ini.Config
-import System.Environment
 import System.Directory
 import System.FilePath.Posix
+import qualified System.Environment
 
 data Conf = Conf {
-    appId :: T.Text
-  , appKey :: T.Text
-  , appRouter :: T.Text
+    appId         :: Text
+  , appKey        :: Text
+  , appRouter     :: Text
   , appRouterPort :: Integer
   }
   deriving (Eq, Show)
 
 iniParser :: IniParser Conf
 iniParser = section "app" $ do
-  appId <- field "id"
-  appKey <- field "key"
-  appRouter <- fieldDef "router" "eu.thethings.network"
+  appId         <- field "id"
+  appKey        <- field "key"
+  appRouter     <- fieldDef "router" "eu.thethings.network"
   appRouterPort <- fieldDefOf "port" number 1883
   return $ Conf {..}
 
 -- | Try parsing config from given 'FilePath'
 parseConfCfg :: FilePath -> IO (Either String Conf)
 parseConfCfg fpath = do
-  rs <- T.readFile fpath
+  rs <- Data.Text.IO.readFile fpath
   return $ parseIniFile rs iniParser
 
--- | Try loading config from location in @TTNCFG@ environment variable or @~/.ttn/config@
+-- | Try loading config from location in @TTNCFG@ environment variable
+-- or from @~/.ttn/config@
 envConfCfg :: IO (Conf)
 envConfCfg = do
-  menv <- lookupEnv "TTNCFG"
+  menv <- System.Environment.lookupEnv "TTNCFG"
   case menv of
     Nothing -> do
       udir <- getHomeDirectory
@@ -75,11 +80,8 @@ envConfCfg = do
         Left err -> putStrLn ("Unable to parse config: " ++ err) >> exitFailure
         Right cfg -> return cfg
 
-
-topic:: MQTT.Topic
-topic = "#"
-
-parseType (MQTT.MqttText t) = typ
+parseType :: Text -> EventType
+parseType t = typ
   where
     typ = case drop 3 sp of
       ["up"]                         -> Up
@@ -93,7 +95,7 @@ parseType (MQTT.MqttText t) = typ
       ["events", "delete"]           -> Delete
       _                              -> Unknown
 
-    sp = T.splitOn "/" t
+    sp = Data.Text.splitOn "/" t
 
 -- | Try to load config from default locations and start actual client
 ttnClient :: TChan Event -> IO ()
@@ -104,43 +106,41 @@ ttnClient chan = do
 -- | Start client with custom `Conf` config
 ttnClientConf :: Conf -> TChan Event -> IO ()
 ttnClientConf Conf{..} chan = do
-  cmds <- MQTT.mkCommands
-  pubChan <- newTChanIO
-  let conf = (MQTT.defaultConfig cmds pubChan)
-              { MQTT.cUsername = Just $ appId
-              , MQTT.cHost = T.unpack appRouter
-              , MQTT.cPort = fromInteger appRouterPort
-              , MQTT.cPassword = Just appKey
-              }
+  let (Just uri) = Network.URI.parseURI
+        $ Data.Text.unpack
+        $ Data.Text.concat [ "mqtt://", appId, ":", appKey, "@", appRouter ]
 
-  forever $ do
-    tID <- forkIO $ do
-      qosGranted <- MQTT.subscribe conf [(topic, MQTT.Handshake)]
-      case qosGranted of
-        [MQTT.Handshake] -> forever $ atomically (readTChan pubChan) >>= (mqttHandleChan chan)
-        _ -> do
-          hPutStrLn stderr $ "Wanted QoS Handshake, got " ++ show qosGranted
-          exitFailure
+  putStrLn $ "Connecting to " ++ show uri
+  mc <- connectURI mqttConfig { _msgCB = SimpleCallback msgReceived } uri
 
-    terminated <- MQTT.run conf
-    hPutStrLn stderr $ "Terminated, restarting. Reason: " ++ show terminated
-    killThread tID
-
-mqttHandleChan :: TChan Event -> MQTT.Message MQTT.PUBLISH -> IO ()
-mqttHandleChan chan msg = do
-    -- sometimes it's useful to ignore retained messages
-    unless (MQTT.retain $ MQTT.header msg) $ do
-      let t = MQTT.topic $ MQTT.body msg
-          p = MQTT.payload $ MQTT.body msg
-
-      putStrLn $ "Received on topic " ++ (show t)
-      case parse p of
+  putStrLn "Connected!"
+  void $ subscribe mc [("#", subOptions)] mempty
+  waitForClient mc
+  where
+    msgReceived _ topic msg _p = do
+      case parse (Data.ByteString.Lazy.toStrict msg) of
         Left err -> do
-          case parseError p of
+          case parseError (Data.ByteString.Lazy.toStrict msg) of
             Left _  -> hPutStrLn stderr $ "Invalid JSON, error: " ++ err
-            Right e -> atomically $ writeTChan chan $ ClientError $ T.unpack $ errorMsg e
+            Right e -> atomically
+              $ writeTChan chan
+              $ ClientError
+              $ Data.Text.unpack
+              $ errorMsg e
 
-        Right u@Uplink{..} -> do
-          let typ = parseType $ MQTT.fromTopic t
+        Right x -> do
+          atomically $ writeTChan chan $ Event (parseType topic) x
 
-          atomically $ writeTChan chan $ Event typ u
+withTTN :: (Event -> IO a) -> IO b
+withTTN act = do
+  c <- newTChanIO
+  void $ async $ forever $ do
+    msg <- atomically $ readTChan c
+    act msg
+
+  forever $ catches (ttnClient c)
+    [ Handler (\(ex :: MQTTException) -> handler (show ex))
+    , Handler (\(ex :: IOException) -> handler (show ex)) ]
+
+  where
+    handler e = putStrLn ("ERROR: " <> e) >> threadDelay 1000000

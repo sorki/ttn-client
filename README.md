@@ -139,3 +139,6 @@ reader chan = do
       Left err -> putStrLn err
       Right evt -> print evt
 ```
+
+See also `withTTN` function which accepts action to perform
+on incoming event and also handles exceptions / reconnects.
