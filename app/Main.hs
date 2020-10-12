@@ -3,33 +3,35 @@
 
 module Main where
 
-import Control.Applicative
-import Control.Exception (finally)
-import Control.Concurrent
-import Control.Concurrent.STM
-import Control.Monad
-import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr)
-
 import Data.TTN
 import Data.TTN.Client
 import Data.TTN.Client.Decode
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as BSL
+import qualified Data.Text
 
-import Text.Pretty.Simple
+import Data.Time
 
 main :: IO ()
 main = do
-  c <- atomically $ newTChan
-  forkIO $ ttnClient c
-  reader c
+  withTTN $ \e -> do
+    case e of
+      (ClientError str) -> putStrLn $ "ClientErr " ++ str
+      (Event etype Uplink{..}) -> do
+        case etype of
+          Up -> do
+            n <- getZonedTime
+            putStrLn $ unwords [
+                formatTime defaultTimeLocale "%F %X" n
+              , maybe "" Data.Text.unpack uplinkDevId
+              , maybe "" (('#':) . show) uplinkCounter
+              , maybe "" (pure "(retry)") uplinkIsRetry
+              , (show $ decodeUplink e)
+              ]
+          _ -> return ()
 
-reader chan = do
-  forever $ do
-    msg <- atomically $ readTChan chan
-    pPrint msg
-    pPrint $ decodeUplink msg
+-- unused
+cvt :: TimeZone -> ZonedTime -> LocalTime
+cvt tz t = utcToLocalTime tz $ zonedTimeToUTC t
+
+renderTime :: TimeZone -> ZonedTime -> String
+renderTime tz t = formatTime defaultTimeLocale "%F %X" (cvt tz t)
