@@ -30,7 +30,7 @@ library
                      , filepath
                      , directory
                      , binary
-                     , cayene-lpp
+                     , cayenne-lpp
                      , base64-bytestring
   default-language:    Haskell2010
 
