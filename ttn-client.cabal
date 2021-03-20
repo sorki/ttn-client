@@ -1,5 +1,5 @@
 name:                ttn-client
-version:             0.2.0.0
+version:             0.2.1.0
 synopsis:            TheThingsNetwork client
 description:         Connect to TTN MQTT API, receive and decode messages
 homepage:            https://github.com/sorki/ttn-client
