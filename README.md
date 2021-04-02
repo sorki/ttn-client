@@ -9,7 +9,7 @@ See https://www.thethingsnetwork.org/docs/applications/mqtt/api.html
 `ttnc` provides a simple command line utility to dump and pretty print incoming data.
 It can also decode two types of payload
 
- * Cayene low power protocol format (via [cayene-lpp](https://github.com/sorki/cayene-lpp))
+ * Cayenne low power protocol format (via [cayenne-lpp](https://github.com/sorki/cayenne-lpp))
  * Simple temperature humidity (two big endian packed floats)
 
 To be able to authenticate with TTN you need to create simple config file along these lines:
@@ -76,7 +76,7 @@ Up
         }
     )
 [ TempHumidity 25.126133 36.549133
-, Cayene
+, Cayenne
     [
         ( 82
         , AnalogIn ( -140.15 )

@@ -11,12 +11,12 @@ import qualified Data.Text
 
 import Data.Binary.Get
 import Data.Either
-import qualified Data.Cayene as CLPP
+import qualified Data.Cayenne as CLPP
 
 
 data Decoded =
     TempHumidity Float Float
-  | Cayene [CLPP.Reading]
+  | Cayenne [CLPP.Reading]
   deriving (Show, Eq, Ord)
 
 decodeUplink :: Event -> [Decoded]
@@ -45,7 +45,7 @@ desTH = do
 decodeCLPP :: ByteString -> Either String Decoded
 decodeCLPP x = case CLPP.decodeMany x of
   [] -> Left "no CLPP data decoded"
-  c  -> Right $ Cayene c
+  c  -> Right $ Cayenne c
 
 unbase64 :: Text -> ByteString
 unbase64 =
